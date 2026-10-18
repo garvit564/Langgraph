@@ -1,0 +1,40 @@
+@"
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Testing and coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Local databases
+*.sqlite3
+db.sqlite3
+
+# Generated files
+staticfiles/
+media/
+
+# OS files
+.DS_Store
+Thumbs.db
+"@ | Set-Content .gitignore
