@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     weatherapi_api_key: str
     database_url: str
     google_api_key: str
+    jwt_secret_key: str
+    jwt_algorithm: str 
+    jwt_expire_minutes: int = 60 * 24 * 7  # 7 days
 
     model_config = SettingsConfigDict(
         env_file=".env",

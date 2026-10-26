@@ -1,37 +1,30 @@
-from fastapi import FastAPI
 from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from app.api.routers.auth import router as auth_router
 from app.api.routers.chat import router as chat_router
-from app.core.config import get_settings
-from app.infrastructure.checkpointer import get_checkpointer,close_connection_pool
+from app.infrastructure.checkpointer import checkpointer, close_connection_pool
+from app.api.routers.conversations import router as conversations_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("LIFESPAN STARTED")
-
-    # Server start hone par tables automatically ban jayengi:
-    checkpointer = get_checkpointer()
     checkpointer.setup()
     yield
+    print("LIFESPAN STOPPED")
     close_connection_pool()
-    
 
-settings = get_settings()
 
 app = FastAPI(
-    title=settings.app_name,
-    version="0.1.0",
+    title="Agent Desk API",
     lifespan=lifespan,
-
 )
 
+# Routers include karein:
+app.include_router(auth_router, prefix="/api/v1")
+app.include_router(chat_router, prefix="/api/v1")
+app.include_router(conversations_router, prefix="/api/v1")
 
 
-
-app.include_router(chat_router)
-
-
-@app.get("/health")
-def health_check() -> dict:
-    return {
-        "status": "ok",
-    }
+@app.get("/")
+def home():
+    return {"message": "Welcome to Agent Desk Backend!"}
