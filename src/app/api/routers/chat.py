@@ -23,7 +23,7 @@ router = APIRouter(
 def chat(
     request: ChatRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+   
 ) -> ChatResponse:
     """Logged-in user ke liye conversation_id ke context me chat message process karta hai."""
     try:
@@ -31,7 +31,7 @@ def chat(
             conversation_id=request.conversation_id,
             user_id=current_user.id,
             message=request.message,
-            db=db,
+            
         )
 
     except ValueError as e:

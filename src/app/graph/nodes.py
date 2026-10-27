@@ -4,9 +4,9 @@ from langchain_core.messages import (
     RemoveMessage,
     SystemMessage,
 )
-from src.app.graph.state import AgentState
-from src.app.infrastructure.llm import get_llm
-from src.app.infrastructure.tools.registry import get_tools
+from app.graph.state import AgentState
+from app.infrastructure.llm import get_llm
+from app.infrastructure.tools.registry import get_tools
 
 current_date = datetime.now().strftime("%d %B %Y")
 
@@ -65,6 +65,13 @@ def agent(state: AgentState) -> dict:
     }
 
 
+# File ke top imports ko clean karein (src. hata kar):
+from app.graph.state import AgentState
+from app.infrastructure.llm import get_llm
+from app.infrastructure.tools.registry import get_tools
+
+
+# Aur summarize_conversation function ko safe banayein:
 def summarize_conversation(state: AgentState) -> dict:
     llm = get_llm()
     messages = state["messages"]
@@ -93,25 +100,37 @@ def summarize_conversation(state: AgentState) -> dict:
     else:
         prompt = "Create a short summary of this conversation, capturing the user's name, preferences, and key facts:"
 
-    # Summarizer LLM call:
-    response = llm.invoke(
-        [
-            *messages_to_summarize,
-            HumanMessage(content=prompt),
-        ]
-    )
+    # -------------------------------------------------------------
+    # RESILIENCE: Try-Except Block
+    # Agar Summarizer LLM fail ho, to user request crash nahi hogi!
+    # -------------------------------------------------------------
+    try:
+        response = llm.invoke(
+            [
+                *messages_to_summarize,
+                HumanMessage(content=prompt),
+            ]
+        )
 
-    new_summary = response.text
-    print(f"\n📝 [SUMMARY UPDATED] ->\n{new_summary}\n")
+        new_summary = response.text
+        print(f"\n📝 [SUMMARY UPDATED] ->\n{new_summary}\n")
 
-    # Jo summarize ho gaye unhe active messages se delete karo:
-    delete_messages = [RemoveMessage(id=m.id) for m in messages_to_summarize]
+        # Jo summarize ho gaye unhe active messages se delete karo:
+        delete_messages = [RemoveMessage(id=m.id) for m in messages_to_summarize]
 
-    return {
-        "summary": new_summary,
-        "messages": delete_messages,
-    }
+        return {
+            "summary": new_summary,
+            "messages": delete_messages,
+        }
+    except Exception as e:
+        # Soft-fail: Log warning print karein lekin graph ko crash hone se bachayein
+        print(f"\n⚠️ [SUMMARIZER WARNING] Summary update failed: {str(e)}. Continuing turn safely.")
+        return {}
 
+
+
+
+    
 # def final_answer(state: AgentState) -> dict:
 #     llm = get_llm()
 
