@@ -1,16 +1,18 @@
 import sys
-from os.path import abspath
+from os.path import abspath, dirname, join
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config, pool
 from alembic import context
 
-# 1. src directory ko Python path me add karein:
-sys.path.insert(0, abspath("src"))
+# 1. src directory ko dynamically resolve karke Python path me add karein:
+src_path = abspath(join(dirname(__file__), "..", "src"))
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
 
-from src.app.core.config import get_settings
-from src.app.infrastructure.database import Base
-import src.app.models.chat  # Saare models ko register karne ke liye
+from app.core.config import get_settings  
+from app.infrastructure.database import Base
+import app.models.chat  # Saare models ko register karne ke liye
 
 # Alembic Config object:
 config = context.config

@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 from langchain_core.messages import (
     HumanMessage,
@@ -8,6 +9,7 @@ from app.graph.state import AgentState
 from app.infrastructure.llm import get_llm
 from app.infrastructure.tools.registry import get_tools
 
+logger = logging.getLogger(__name__)
 current_date = datetime.now().strftime("%d %B %Y")
 
 AGENT_SYSTEM_PROMPT = f"""You are an intelligent, friendly, and structured AI assistant.
@@ -27,12 +29,13 @@ Behavior Guidelines:
 """
 
 
-def agent(state: AgentState) -> dict:
+async def agent(state: AgentState) -> dict:
+    """Core agent node: Injects past conversation recap, binds external tools, and asynchronously invokes the LLM."""
     llm = get_llm()
     tools = get_tools()
     llm_with_tools = llm.bind_tools(tools)
 
-    # 1. Agar summary bani hui hai to prompt me recap inject karein:
+    # 1. Inject past conversation summary into the system prompt if present
     existing_summary = state.get("summary", "")
     if existing_summary:
         full_system_prompt = (
@@ -46,8 +49,8 @@ def agent(state: AgentState) -> dict:
     else:
         full_system_prompt = AGENT_SYSTEM_PROMPT
 
-    # 2. LLM Call:
-    response = llm_with_tools.invoke(
+    # 2. Asynchronously invoke the LLM with system instructions and current message history
+    response = await llm_with_tools.ainvoke(
         [
             SystemMessage(content=full_system_prompt),
             *state["messages"],
@@ -56,32 +59,26 @@ def agent(state: AgentState) -> dict:
 
     if response.tool_calls:
         for call in response.tool_calls:
-            print(f"\n🔧 [TOOL CALLED] -> Name: {call['name']} | Arguments: {call['args']}")
+            logger.info("Tool called by agent: %s with args: %s", call["name"], call["args"])
     else:
-        print("\n⚡ [NO TOOL CALLED] -> Agent is answering directly without tools.")
+        logger.info("Agent responded directly without calling any tools.")
 
     return {
         "messages": [response],
     }
 
 
-# File ke top imports ko clean karein (src. hata kar):
-from app.graph.state import AgentState
-from app.infrastructure.llm import get_llm
-from app.infrastructure.tools.registry import get_tools
-
-
-# Aur summarize_conversation function ko safe banayein:
-def summarize_conversation(state: AgentState) -> dict:
+async def summarize_conversation(state: AgentState) -> dict:
+    """Summarizer node: Periodically compresses older messages into an ongoing summary to keep context within limits."""
     llm = get_llm()
     messages = state["messages"]
 
-    # Recent 4 messages chhod kar baaki purane summarize karne hain:
+    # Retain the most recent 4 messages; compress older ones into the running recap
     keep_count = 4
     cutoff = len(messages) - keep_count
     split_idx = cutoff
 
-    # Safe cut jo HumanMessage se shuru ho:
+    # Find a safe cutoff starting at a HumanMessage boundary
     for i in range(cutoff, len(messages)):
         if messages[i].type == "human":
             split_idx = i
@@ -100,12 +97,8 @@ def summarize_conversation(state: AgentState) -> dict:
     else:
         prompt = "Create a short summary of this conversation, capturing the user's name, preferences, and key facts:"
 
-    # -------------------------------------------------------------
-    # RESILIENCE: Try-Except Block
-    # Agar Summarizer LLM fail ho, to user request crash nahi hogi!
-    # -------------------------------------------------------------
     try:
-        response = llm.invoke(
+        response = await llm.ainvoke(
             [
                 *messages_to_summarize,
                 HumanMessage(content=prompt),
@@ -113,9 +106,9 @@ def summarize_conversation(state: AgentState) -> dict:
         )
 
         new_summary = response.text
-        print(f"\n📝 [SUMMARY UPDATED] ->\n{new_summary}\n")
+        logger.info("Conversation summary successfully updated: %s", new_summary[:100] + "..." if len(new_summary) > 100 else new_summary)
 
-        # Jo summarize ho gaye unhe active messages se delete karo:
+        # Remove summarized messages from active state to reclaim context window tokens
         delete_messages = [RemoveMessage(id=m.id) for m in messages_to_summarize]
 
         return {
@@ -123,30 +116,6 @@ def summarize_conversation(state: AgentState) -> dict:
             "messages": delete_messages,
         }
     except Exception as e:
-        # Soft-fail: Log warning print karein lekin graph ko crash hone se bachayein
-        print(f"\n⚠️ [SUMMARIZER WARNING] Summary update failed: {str(e)}. Continuing turn safely.")
+        # Graceful degradation: log warning and continue without failing the main conversation turn
+        logger.warning("Conversation summarization failed gracefully: %s. Continuing execution.", e)
         return {}
-
-
-
-
-    
-# def final_answer(state: AgentState) -> dict:
-#     llm = get_llm()
-
-#     structured_llm = llm.with_structured_output(ChatResponse)
-#     last_agent_message = state["messages"][-1].content
-#     response: ChatResponse = structured_llm.invoke(
-#         [
-#             SystemMessage(content=FINAL_SYSTEM_PROMPT),
-#             # *state["messages"],
-#             HumanMessage(content=f"Please format the following answer into the required JSON schema:\n\n{last_agent_message}")
-#         ]
-#     )
-
-#     return {
-#         "structured_response": response,
-#         # "messages": [
-#         #     AIMessage(content=response.model_dump_json())
-#         # ],
-#     }

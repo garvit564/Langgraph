@@ -1,23 +1,34 @@
-from psycopg_pool import ConnectionPool
-from langgraph.checkpoint.postgres import PostgresSaver
+import logging
+from psycopg_pool import AsyncConnectionPool
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
 from app.core.config import get_settings
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
-# 1. Database Connection Pool:
-pool = ConnectionPool(
+# Asynchronous connection pool dedicated to LangGraph state checkpointing
+pool = AsyncConnectionPool(
     conninfo=settings.database_url,
     max_size=20,
     kwargs={"autocommit": True},
+    open=False,
 )
 
-# 2. Postgres Checkpointer:
-checkpointer = PostgresSaver(pool)
+_checkpointer: AsyncPostgresSaver | None = None
 
 
-def get_checkpointer() -> PostgresSaver:
-    return checkpointer
+def get_checkpointer() -> AsyncPostgresSaver:
+    """Returns the persistent asynchronous PostgreSQL checkpointer for LangGraph.
+    Lazily initialized within an active running asyncio event loop.
+    """
+    global _checkpointer
+    if _checkpointer is None:
+        _checkpointer = AsyncPostgresSaver(pool)
+    return _checkpointer
 
-def close_connection_pool():
-    pool.close()
+
+async def close_connection_pool() -> None:
+    """Gracefully closes all open connections in the asynchronous checkpointer pool."""
+    logger.info("Closing LangGraph checkpointer connection pool...")
+    await pool.close()

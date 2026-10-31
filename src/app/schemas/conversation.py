@@ -3,17 +3,19 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 
-# Request schema: Nayi conversation create karne ke liye (Title optional hai)
 class ConversationCreate(BaseModel):
-    title: str | None = Field(default="New Chat", max_length=255)
+    """Schema for creating a new conversation."""
+    title: str | None = Field(default="New Chat", max_length=255, description="Optional conversation title")
 
 
-# Response schema: Conversation ki details return karne ke liye
 class ConversationOut(BaseModel):
+    """Schema for public conversation details."""
     id: uuid.UUID
     user_id: uuid.UUID
     title: str
     thread_id: str
+    is_processing: bool = False
+    cancel_requested: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -21,8 +23,8 @@ class ConversationOut(BaseModel):
         from_attributes = True
 
 
-# Response schema: Chat bubble message return karne ke liye
 class MessageOut(BaseModel):
+    """Schema for public chat message bubble items."""
     id: uuid.UUID
     conversation_id: uuid.UUID
     role: str

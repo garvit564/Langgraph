@@ -1,7 +1,10 @@
+import logging
 from langchain_core.tools import tool
 from langchain_tavily import TavilySearch
 
-from src.app.core.config import get_settings
+from app.core.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 @tool
@@ -9,7 +12,7 @@ def web_search(query: str) -> dict:
     """Search the web for current information, recent news,
     documentation, and facts that require online research.
     """
-
+    logger.info("Executing web search for query: '%s'", query)
     settings = get_settings()
 
     search_tool = TavilySearch(
@@ -18,4 +21,6 @@ def web_search(query: str) -> dict:
         tavily_api_key=settings.tavily_api_key,
     )
 
-    return search_tool.invoke({"query": query})
+    result = search_tool.invoke({"query": query})
+    logger.debug("Web search completed for query: '%s'", query)
+    return result

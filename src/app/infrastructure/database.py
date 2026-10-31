@@ -1,15 +1,16 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
+
 from app.core.config import get_settings
 
 settings = get_settings()
 
-# postgresql:// ko postgresql+psycopg:// me convert karte hain SQLAlchemy ke liye:
+# Normalize connection string for SQLAlchemy with the psycopg (v3) driver
 db_url = settings.database_url
 if db_url.startswith("postgresql://") and "+psycopg" not in db_url:
     db_url = db_url.replace("postgresql://", "postgresql+psycopg://")
 
-# Database Engine:
+# Production PostgreSQL Database Engine
 engine = create_engine(
     db_url,
     pool_size=10,
@@ -17,19 +18,19 @@ engine = create_engine(
     pool_pre_ping=True,
 )
 
-# Har request ke liye DB session factory:
+# Thread-safe database session factory
 SessionLocal = sessionmaker(
     autocommit=False,
     autoflush=False,
     bind=engine,
 )
 
-# Saare models (User, Conversation, Message) is Base se inherit karenge:
+# Declarative Base for ORM models
 Base = declarative_base()
 
 
 def get_db():
-    """FastAPI routes me Database Session inject karne ke liye dependency."""
+    """FastAPI dependency that provides a scoped database session per request."""
     db = SessionLocal()
     try:
         yield db
