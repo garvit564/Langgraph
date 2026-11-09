@@ -21,16 +21,18 @@ async def generate_chat_response(
     conversation_id: uuid.UUID,
     user_id: uuid.UUID,
     message: str,
+    client_message_id: str | None = None,
 ) -> ChatResponse:
-    """Processes a user chat message asynchronously: acquires an atomic Compare-And-Swap (CAS)
-    lock, executes the LangGraph agent pipeline, supports instant abort cancellation,
-    and cleanly closes conversation turns in both PostgreSQL and LangGraph checkpoint state.
+    """Processes a user chat message asynchronously: supports idempotency deduplication,
+    acquires an atomic Compare-And-Swap (CAS) lock, executes the LangGraph agent pipeline,
+    supports instant abort cancellation, and cleanly closes conversation turns in both
+    PostgreSQL and LangGraph checkpoint state.
     """
-    logger.info("Initiating chat turn for conversation: %s", conversation_id)
+    logger.info("Initiating chat turn for conversation: %s (client_message_id: %s)", conversation_id, client_message_id)
 
     # -------------------------------------------------------------
     # PHASE 1: Short Database Transaction (~5ms)
-    # Atomic CAS Lock Acquisition + User Message Persistence
+    # Idempotency Check + Atomic CAS Lock Acquisition + User Message Persistence
     # -------------------------------------------------------------
     with SessionLocal() as db:
         conv = (
@@ -42,10 +44,37 @@ async def generate_chat_response(
             logger.warning("Conversation %s not found for user: %s", conversation_id, user_id)
             raise ValueError("Conversation not found or access denied.")
 
+        # 1. Idempotency Check: Did we already process this exact client request?
+        if client_message_id:
+            existing_user_msg = (
+                db.query(Message)
+                .filter(
+                    Message.conversation_id == conversation_id,
+                    Message.client_message_id == client_message_id,
+                )
+                .first()
+            )
+            if existing_user_msg:
+                logger.info("Idempotent retry detected for client_message_id: %s", client_message_id)
+                # Find the assistant response generated for this user message
+                cached_ai_msg = (
+                    db.query(Message)
+                    .filter(
+                        Message.conversation_id == conversation_id,
+                        Message.role == "assistant",
+                        Message.created_at >= existing_user_msg.created_at,
+                    )
+                    .order_by(Message.created_at.asc())
+                    .first()
+                )
+                if cached_ai_msg:
+                    logger.info("Replaying cached response for idempotent request: %s", client_message_id)
+                    return ChatResponse(answer=cached_ai_msg.content)
+
         thread_id = conv.thread_id
         is_new_chat = (conv.title == "New Chat")
 
-        # Atomic Compare-And-Swap (CAS) lock check and acquisition
+        # 2. Atomic Compare-And-Swap (CAS) lock check and acquisition
         rows_updated = (
             db.query(Conversation)
             .filter(
@@ -68,15 +97,16 @@ async def generate_chat_response(
                 "A response is already being generated for this conversation. Please wait or click stop."
             )
 
-        # Persist user prompt message
+        # 3. Persist user prompt message with client_message_id
         user_msg = Message(
             conversation_id=conv.id,
             role="user",
             content=message,
+            client_message_id=client_message_id,
         )
         db.add(user_msg)
         db.commit()
-        logger.debug("Persisted user message for conversation: %s", conversation_id)
+        logger.debug("Persisted user message for conversation: %s (client_message_id: %s)", conversation_id, client_message_id)
 
     # -------------------------------------------------------------
     # PHASE 2: Asynchronous LangGraph Execution

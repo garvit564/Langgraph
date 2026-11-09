@@ -70,6 +70,9 @@ class Message(Base):
     role = Column(String(50), nullable=False)
     content = Column(Text, nullable=False)
 
+    # Idempotency identifier provided by the client
+    client_message_id = Column(String(64), unique=True, index=True, nullable=True)
+
     created_at = Column(DateTime(timezone=True), default=utc_now)
 
     # Relationships

@@ -29,6 +29,7 @@ class MessageOut(BaseModel):
     conversation_id: uuid.UUID
     role: str
     content: str
+    client_message_id: str | None = None
     created_at: datetime
 
     class Config:

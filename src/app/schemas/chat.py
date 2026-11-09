@@ -11,6 +11,11 @@ class ChatRequest(BaseModel):
         max_length=10000,
         description="User text message to the AI assistant",
     )
+    client_message_id: str | None = Field(
+        default=None,
+        max_length=64,
+        description="Optional client-generated UUID for idempotency deduplication",
+    )
 
 
 class ChatResponse(BaseModel):

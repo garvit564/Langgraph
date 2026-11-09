@@ -37,6 +37,7 @@ async def chat(
             conversation_id=request.conversation_id,
             user_id=current_user.id,
             message=request.message,
+            client_message_id=request.client_message_id,
         )
 
     except ConversationBusyError as e:
