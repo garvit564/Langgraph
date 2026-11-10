@@ -1,7 +1,8 @@
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-
+from fastapi import Request
+from app.core.limiter import limiter
 from app.api.deps import get_current_user
 from app.core.security import create_access_token, hash_password, verify_password
 from app.infrastructure.database import get_db
@@ -14,7 +15,8 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-def register(payload: UserRegister, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+def register(request: Request,payload: UserRegister, db: Session = Depends(get_db)):
     """Registers a new user account and returns a signed JWT access token."""
     email_clean = payload.email.lower().strip()
     logger.info("Processing user registration attempt for: %s", email_clean)
@@ -49,7 +51,8 @@ def register(payload: UserRegister, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(payload: UserLogin, db: Session = Depends(get_db)):
+@limiter.limit("7/minute")
+def login(request: Request,payload: UserLogin, db: Session = Depends(get_db)):
     """Authenticates user credentials and returns a signed JWT access token."""
     email_clean = payload.email.lower().strip()
     logger.info("Processing login attempt for: %s", email_clean)

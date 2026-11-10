@@ -22,6 +22,19 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60 * 24 * 7  # 7 days
 
+    # Redis Configuration
+    redis_url: str = "redis://localhost:6379/0"
+
+    # SMTP Email Configuration
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from_email: str = ""
+
+    # Worker Microservice URL (Port 8001)
+    worker_service_url: str = "http://localhost:8001"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

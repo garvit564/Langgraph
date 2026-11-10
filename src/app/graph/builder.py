@@ -21,7 +21,7 @@ def should_continue(state: AgentState) -> str:
         return "tools"
 
     # 2. Trigger periodic summarization if message history exceeds the threshold
-    if len(messages) > 6:
+    if len(messages) > 20:
         logger.debug("Message count exceeds threshold (%d messages). Routing to 'summarize_conversation'.", len(messages))
         return "summarize_conversation"
 

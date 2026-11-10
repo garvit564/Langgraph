@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime
 from langchain_core.messages import (
+    AIMessage,
     HumanMessage,
     RemoveMessage,
     SystemMessage,
@@ -18,6 +19,7 @@ Today's date is {current_date}.
 Capabilities:
 - web_search: For latest news, current facts, and research.
 - get_current_weather: For live weather.
+- send_email: For sending emails, reports, contact lists, or research findings to any recipient email address.
 
 Behavior Guidelines:
 1. Be natural, polite, and conversational. For casual chats or greetings, respond warmly and directly.
@@ -73,20 +75,21 @@ async def summarize_conversation(state: AgentState) -> dict:
     llm = get_llm()
     messages = state["messages"]
 
-    # Retain the most recent 4 messages; compress older ones into the running recap
-    keep_count = 4
+    # Retain recent messages; safely cut backwards so retained history ALWAYS starts with a clean HumanMessage
+    keep_count = 6
     cutoff = len(messages) - keep_count
-    split_idx = cutoff
 
-    # Find a safe cutoff starting at a HumanMessage boundary
-    for i in range(cutoff, len(messages)):
-        if messages[i].type == "human":
+    split_idx = 0
+    for i in range(cutoff, 0, -1):
+        if getattr(messages[i], "type", "") == "human":
             split_idx = i
             break
 
-    messages_to_summarize = messages[:split_idx]
-    if not messages_to_summarize:
+    # If no clean turn boundary is found, skip summarization safely
+    if split_idx == 0:
         return {}
+
+    messages_to_summarize = messages[:split_idx]
 
     existing_summary = state.get("summary", "")
     if existing_summary:
